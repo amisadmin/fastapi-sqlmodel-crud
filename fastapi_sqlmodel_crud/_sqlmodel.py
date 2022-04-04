@@ -104,7 +104,7 @@ class SQLModelSelector:
                     link_item_id = link_item_id[1:]
                     if not link_item_id:
                         return None
-                link_item_id = parser_str_set_list(link_item_id)
+                link_item_id = list(map(self.parser.get_python_type_parse(link_col), parser_str_set_list(link_item_id)))
                 if op == 'in_':
                     return self.pk.in_(select(pk_col).where(link_col.in_(link_item_id)))
                 elif op == 'not_in':
@@ -112,7 +112,11 @@ class SQLModelSelector:
         return None
 
     @staticmethod
-    def _parser_query_value(value: Any, operator: str = '__eq__') -> Tuple[Optional[str], Union[tuple, None]]:
+    def _parser_query_value(
+            value: Any,
+            operator: str = '__eq__',
+            python_type_parse: Callable = str
+    ) -> Tuple[Optional[str], Union[tuple, None]]:
         if isinstance(value, str):
             match = sql_operator_pattern.match(value)
             if match:
@@ -122,15 +126,15 @@ class SQLModelSelector:
                 if not value:
                     return None, None
                 if operator in ['like', 'not_like'] and value.find('%') == -1:
-                    value = f'%{value}%'
+                    return operator, (f'%{value}%',)
                 elif operator in ['in_', 'not_in']:
-                    value = list(set(value.split(',')))
+                    return operator, (list(map(python_type_parse, set(value.split(',')))),)
                 elif operator == 'between':
                     value = value.split(',')[:2]
                     if len(value) < 2:
                         return None, None
-                    return operator, tuple(value)
-        return operator, (value,)
+                    return operator, tuple(map(python_type_parse, value))
+        return operator, (python_type_parse(value),)
 
     def calc_filter_clause(self, data: Dict[str, Any]) -> List[BinaryExpression]:
         lst = []
@@ -171,9 +175,10 @@ class SQLModelCrud(BaseCrud, SQLModelSelector):
                     modelfield.validators = []
             self.schema_filter = schema_create_by_modelfield(schema_name=self.schema_name_prefix + 'Filter',
                                                              modelfields=modelfields, set_none=True)
+        self.schema_read = self.schema_read or self.schema_list
         if not self.schema_update and self.readonly_fields:
-            exclude = set([self.parser.get_modelfield(ins).name for ins in
-                           self.parser.filter_insfield(self.readonly_fields)])
+            exclude = {self.parser.get_modelfield(ins).name for ins in
+                       self.parser.filter_insfield(self.readonly_fields)}
             exclude.add(self.pk_name)
             self.schema_update = schema_create_by_schema(self.schema_model, self.schema_name_prefix + 'Update',
                                                          exclude=exclude, set_none=True)
@@ -252,15 +257,14 @@ class SQLModelCrud(BaseCrud, SQLModelSelector):
                 result = await session.execute(stmt)
                 if result.rowcount:  # type: ignore
                     await session.commit()
-                    if is_bulk:
-                        return BaseApiOut(data=result.rowcount)  # type: ignore
-                    else:
-                        data = values[0]
-                        data[self.pk_name] = result.lastrowid  # type: ignore
-                        data = self.model.parse_obj(data)
-                        return BaseApiOut(data=data)
-            except Exception:
-                return self.error_key_exists(request)
+            except Exception as error:
+                return self.error_execute_sql(request=request, error=error)
+            if is_bulk:
+                return BaseApiOut(data=result.rowcount)  # type: ignore
+            data = values[0]
+            data[self.pk_name] = getattr(result, "lastrowid", None)
+            data = self.model.parse_obj(data)
+            return BaseApiOut(data=data)
 
         return route
 
@@ -274,7 +278,9 @@ class SQLModelCrud(BaseCrud, SQLModelSelector):
         ):
             if not await self.has_read_permission(request, item_id):
                 return self.error_no_router_permission(request)
-            result = await session.execute(stmt.where(self.pk.in_(item_id)))
+            result = await session.execute(stmt.where(
+                self.pk.in_(list(map(self.parser.get_python_type_parse(self.pk), item_id)))
+            ))
             items = result.all()
             items = self.parser.conv_row_to_dict(items)
             if items:
@@ -294,7 +300,7 @@ class SQLModelCrud(BaseCrud, SQLModelSelector):
                         ):
             if not await self.has_update_permission(request, item_id, data):
                 return self.error_no_router_permission(request)
-            stmt = update(self.model).where(self.pk.in_(item_id))
+            stmt = update(self.model).where(self.pk.in_(list(map(self.parser.get_python_type_parse(self.pk), item_id))))
             data = await self.on_update_pre(request, data)
             if not data:
                 return self.error_data_handle(request)
@@ -315,7 +321,7 @@ class SQLModelCrud(BaseCrud, SQLModelSelector):
         ):
             if not await self.has_delete_permission(request, item_id):
                 return self.error_no_router_permission(request)
-            stmt = delete(self.model).where(self.pk.in_(item_id))
+            stmt = delete(self.model).where(self.pk.in_(list(map(self.parser.get_python_type_parse(self.pk), item_id))))
             result = await session.execute(stmt)
             if result.rowcount:  # type: ignore
                 await session.commit()
