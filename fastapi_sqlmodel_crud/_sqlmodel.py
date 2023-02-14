@@ -445,7 +445,8 @@ class SQLModelCrud(BaseCrud, SQLModelSelector):
             if orderBy:
                 stmt = stmt.order_by(*orderBy)
             stmt = stmt.limit(perPage).offset((page - 1) * perPage)
-            result = await self.db.async_execute(stmt).all()
+            result = await self.db.async_execute(stmt)
+            result = result.all()
             if using_custom_model:
                 data.items = [item[0] for item in result]
             else:
