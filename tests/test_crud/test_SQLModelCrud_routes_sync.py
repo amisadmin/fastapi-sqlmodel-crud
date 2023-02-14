@@ -8,7 +8,7 @@ from sqlmodel import SQLModel
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.testclient import TestClient
 
-from fastapi_amis_admin.crud import SQLModelCrud
+from fastapi_sqlmodel_crud import SQLModelCrud
 from tests.conftest import sync_db as db
 from tests.models import Tag, User
 

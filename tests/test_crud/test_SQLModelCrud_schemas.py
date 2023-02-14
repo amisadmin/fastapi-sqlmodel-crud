@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from pydantic import BaseModel
 from sqlmodel import SQLModel
 
-from fastapi_amis_admin.crud import SQLModelCrud
+from fastapi_sqlmodel_crud import SQLModelCrud
 from tests.conftest import async_db as db
 from tests.models import Article, ArticleContent, Category, Tag, User
 
