@@ -12,7 +12,7 @@ maintainers = [
 ]
 description = "fastapi-sqlmodel-crud is a program which is based on fastapi+sqlmodel and used to quickly build the Create, Read, Update, Delete generic API interface."
 readme = "README.md"
-requires-python = ">=3.6.1"
+requires-python = ">=3.7"
 dynamic = ["version"]
 keywords = [
     "sqlmodel",

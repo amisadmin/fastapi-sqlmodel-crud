@@ -4,7 +4,7 @@ from httpx import AsyncClient
 from pydantic import BaseModel
 from sqlalchemy import event
 
-from fastapi_amis_admin.crud import SQLModelCrud
+from fastapi_sqlmodel_crud import SQLModelCrud
 from tests.conftest import async_db as db
 from tests.models import User
 from tests.test_crud.test_SQLModelCrud_routes_async import (

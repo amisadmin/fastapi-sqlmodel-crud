@@ -1,4 +1,4 @@
-from fastapi_amis_admin.crud import SQLModelSelector
+from fastapi_sqlmodel_crud import SQLModelSelector
 from tests.models import Article, User
 
 
