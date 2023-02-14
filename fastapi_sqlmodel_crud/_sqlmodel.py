@@ -409,6 +409,9 @@ class SQLModelCrud(BaseCrud, SQLModelSelector):
         ):
             if not await self.has_list_permission(request, paginator, filters):
                 return self.error_no_router_permission(request)
+            using_custom_model = self.schema_list != self.schema_model
+            if using_custom_model:
+                stmt = select(self.schema_model)
             data = ItemListSchema(items=[])
             page, perPage = paginator.page, paginator.perPage
             filters_data = await self.on_filter_pre(request, filters)
@@ -423,8 +426,11 @@ class SQLModelCrud(BaseCrud, SQLModelSelector):
             if orderBy:
                 stmt = stmt.order_by(*orderBy)
             stmt = stmt.limit(perPage).offset((page - 1) * perPage)
-            data.items = await self.db.async_execute(stmt, on_close_pre=lambda r: r.all())
-            data.items = self.parser.conv_row_to_dict(data.items)
+            results = await self.db.async_execute(stmt, on_close_pre=lambda r: r.all())
+            if using_custom_model:
+                data.items = [item[0] for item in results.all()]
+            else:
+                data.items = self.parser.conv_row_to_dict(results.all())
             data.items = [self.schema_list.parse_obj(item) for item in data.items] if data.items else []
             data.query = request.query_params
             data.filters = filters_data
